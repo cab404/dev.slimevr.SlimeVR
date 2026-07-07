@@ -1,7 +1,9 @@
 app-id: dev.slimevr.SlimeVR
-runtime: org.gnome.Platform
-sdk: org.gnome.Sdk
-runtime-version: '48'
+runtime: org.freedesktop.Platform
+sdk: org.freedesktop.Sdk
+runtime-version: '25.08'
+base: org.electronjs.Electron2.BaseApp
+base-version: '25.08'
 separate-locales: false
 command: slimevr
 finish-args:
@@ -17,62 +19,102 @@ finish-args:
   - --socket=pulseaudio
   # Add JRE bin on path
   - --env=PATH=/app/jre/bin:/usr/bin:/app/bin
+  - --env=JAVA_HOME=/app/jre
   #- --env=GDK_BACKEND=wayland,x11
+  - --env=ELECTRON_TRASH=gio
 # build dependencies
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.openjdk17
-  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
 modules:
   # We need LibUSB for HID4Java
   - shared-modules/libusb/libusb.json
   # We need the JRE for executing the server
+  - name: node
+    buildsystem: simple
+    build-commands:
+      - /usr/lib/sdk/node22/install-sdk.sh
   - name: openjdk
     buildsystem: simple
     build-commands:
       - /usr/lib/sdk/openjdk17/install.sh
-  - name: slimevr-server
-    buildsystem: simple
-    build-commands:
-      - mkdir -p /app/share/slimevr
-      - install -Dm755 slimevr.jar /app/share/slimevr/slimevr.jar
-    sources:
-      - type: file
-        url: https://github.com/SlimeVR/SlimeVR-Server/releases/download/v18.2.0/slimevr.jar
-        sha256: fd8409017e800eea8b00938efa3992be684769d6e3593c579ae4a2b422644790
   - name: slimevr-gui
     buildsystem: simple
     build-options:
-      append-path: /usr/lib/sdk/rust-stable/bin
+      append-path: /usr/lib/sdk/node22/bin:/run/build/slimevr-gui/pnpm/bin:/run/build/slimevr-gui/node_modules/.pnpm/node_modules/.bin
       env:
-        CARGO_HOME: /run/build/slimevr-gui/cargo
+        XGD_CACHE_HOME: /run/build/slimevr-gui/flatpak-node/cache
+        npm_config_cache: /run/build/slimevr-gui/flatpak-node/npm-cache
+        TMPDIR: /run/build/slimevr-gui/flatpak-node/tmp
+
+        ELECTRON_CONFIG_CACHE: /run/build/slimevr-gui/flatpak-node/cache/electron
+        electron_config_cache: /run/build/slimevr-gui/flatpak-node/cache/electron
+        ELECTRON_CACHE: /run/build/slimevr-gui/flatpak-node/cache/electron
+
+    # Reference https://github.com/SlimeVR/SlimeVR-Server/blob/main/.github/workflows/build.yml
     build-commands:
-      - sed -i gui/src-tauri/dev.slimevr.SlimeVR.desktop -e "s|{{exec}}|slimevr|"
-        -e "s|{{icon}}|dev.slimevr.SlimeVR|"
-      - cargo --offline fetch --manifest-path Cargo.toml --verbose
-      - mkdir -p gui/dist/ && tar -xf slimevr-gui-dist.tar.gz -C gui/dist && ls -l
-        gui/dist
-      - cargo --offline build --release
-      - install -Dm644 gui/src-tauri/icons/icon.svg /app/share/icons/hicolor/scalable/apps/dev.slimevr.SlimeVR.svg
-      - install -Dm644 -t /app/share/metainfo dev.slimevr.SlimeVR.metainfo.xml
-      - install -Dm644 -t /app/share/applications gui/src-tauri/dev.slimevr.SlimeVR.desktop
-      - install -Dm755 target/release/slimevr /app/bin/slimevr-bin
+      - mkdir -p $TMPDIR
+      - cmake -S bindings-provider/ -B bindings-provider/build -DCMAKE_BUILD_TYPE=Release
+      - cmake --build bindings-provider/build --config Release -j6
+      # fix paths so electron-builder finds them
+      - |
+        case "$FLATPAK_ARCH" in
+          x86_64) EB_ARCH=x64 ;;
+          aarch64) EB_ARCH=arm64 ;;
+        esac
+        cd bindings-provider/build
+        mkdir "linux-$EB_ARCH/"
+        mv {libopenvr_api.so,slimevr-bindings-provider} "linux-$EB_ARCH/"
+
+      - ln -s $(pwd)/pnpm/bin/pnpm.cjs $(pwd)/pnpm/bin/pnpm
+      - pnpm i --offline --frozen-lockfile
+      - |
+        cd gui
+        pnpm run build
+      - |
+        mkdir -p server/desktop/build/libs
+        cp slimevr.jar server/desktop/build/libs/slimevr.jar
+      - |
+        VERSION=$(git --no-pager tag --sort -taggerdate --points-at HEAD | head -1)
+        [ -z "$VERSION" ] && VERSION="0.0.0"
+        VERSION="${VERSION#v}"
+        echo "Building version: $VERSION"
+
+        cd gui
+        mkdir -p gui/dist/artifacts/linux
+
+        . ../flatpak-node/electron-builder-arch-args.sh
+        electron-builder $ELECTRON_BUILDER_ARCH_ARGS --linux dir --publish never -c.extraMetadata.version=$VERSION
+
+      # Bundle app and dependencies
+      - cp -a gui/dist/artifacts/linux/linux*unpacked /app/main
       - install -Dm755 slimevr-wrapper /app/bin/slimevr
+      - install -Dm644 dev.slimevr.SlimeVR.desktop -t /app/share/applications
+      - install -Dm644 gui/electron/resources/icons/icon.svg /app/share/icons/hicolor/scalable/apps/dev.slimevr.SlimeVR.svg
+      - install -Dm644 dev.slimevr.SlimeVR.metainfo.xml -t /app/share/metainfo
+      #
     sources:
+      - type: file
+        url: https://github.com/SlimeVR/SlimeVR-Server/releases/download/v20.1.0/slimevr.jar
+        sha256: 2dde96d4009b6c91a4ec25f4f7ea322d1eef5e16622c1003098ffd4a3b34b495
       - type: git
         url: https://github.com/SlimeVR/SlimeVR-Server.git
-        tag: v18.2.0
-        commit: 0236a05f265f3fbeeb1c71083acbb486878da064
+        tag: v20.1.0
+        commit: 81a46c2ea50ef7699a338795352ee8addece19fe
       # Patch for not checking if git is clean
       - type: patch
         path: clean.diff
       - type: file
         path: dev.slimevr.SlimeVR.metainfo.xml
       - type: file
-        url: https://github.com/SlimeVR/SlimeVR-Server/releases/download/v18.2.0/slimevr-gui-dist.tar.gz
-        sha256: 3e29eef83bd7a260f6631bd204b3454bfebf28a91bc2c4300c0f967757e70f34
-      - cargo-sources.json
+        path: dev.slimevr.SlimeVR.desktop
+      - type: archive
+        url: https://registry.npmjs.org/pnpm/-/pnpm-10.33.0.tgz
+        sha512: 10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319
+        dest: pnpm
+      - generated-sources.json
       - type: script
         dest-filename: slimevr-wrapper
         commands:
           - export TMPDIR="$XDG_RUNTIME_DIR/app/$FLATPAK_ID"
-          - exec /app/bin/slimevr-bin "$@"
+          - exec zypak-wrapper /app/main/slimevr "$@"
