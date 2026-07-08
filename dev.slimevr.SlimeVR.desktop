@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=SlimeVR
+Exec=slimevr %U
+Icon=dev.slimevr.SlimeVR
+Type=Application
+Categories=Utility;
+StartupWMClass=SlimeVR

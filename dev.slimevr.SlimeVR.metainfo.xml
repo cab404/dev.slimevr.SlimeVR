@@ -65,6 +65,7 @@ work.  If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
   </provides>
 
   <releases>
+    <release version="20.1.0" date="2026-06-21"><url>https://github.com/SlimeVR/SlimeVR-Server/releases/tag/v20.1.0</url></release>
     <release version="18.2.0" date="2026-03-05">
       <description></description>
     </release>
