@@ -43,13 +43,10 @@ modules:
     build-options:
       append-path: /usr/lib/sdk/node22/bin:/run/build/slimevr-gui/pnpm/bin:/run/build/slimevr-gui/node_modules/.pnpm/node_modules/.bin
       env:
-        XGD_CACHE_HOME: /run/build/slimevr-gui/flatpak-node/cache
-        npm_config_cache: /run/build/slimevr-gui/flatpak-node/npm-cache
         TMPDIR: /run/build/slimevr-gui/flatpak-node/tmp
-
-        ELECTRON_CONFIG_CACHE: /run/build/slimevr-gui/flatpak-node/cache/electron
+        XDG_CACHE_HOME: /run/build/slimevr-gui/flatpak-node/cache
+        pnpm_config_cache: /run/build/slimevr-gui/flatpak-node/npm-cache
         electron_config_cache: /run/build/slimevr-gui/flatpak-node/cache/electron
-        ELECTRON_CACHE: /run/build/slimevr-gui/flatpak-node/cache/electron
 
     # Reference https://github.com/SlimeVR/SlimeVR-Server/blob/main/.github/workflows/build.yml
     build-commands:
