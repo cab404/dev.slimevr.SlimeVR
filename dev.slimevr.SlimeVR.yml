@@ -77,7 +77,7 @@ modules:
         mkdir -p gui/dist/artifacts/linux
 
         . ../flatpak-node/electron-builder-arch-args.sh
-        electron-builder $ELECTRON_BUILDER_ARCH_ARGS --linux dir --publish never -c.extraMetadata.version=$VERSION
+        electron-builder $ELECTRON_BUILDER_ARCH_ARGS --linux dir --publish never -c.extraMetadata.version=$VERSION --config.electronDownload.isVerifyChecksum="false"
 
       # Bundle app and dependencies
       - cp -a gui/dist/artifacts/linux/linux*unpacked /app/main
